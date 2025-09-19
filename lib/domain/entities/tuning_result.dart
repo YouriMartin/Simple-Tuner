@@ -20,13 +20,13 @@ class TuningResult extends Equatable {
   });
 
   /// Creates a TuningResult indicating no sound detected
-  const TuningResult.noSound()
+  TuningResult.noSound()
       : detectedNote = null,
         detectedFrequency = 0.0,
         centsOffset = 0.0,
         amplitude = 0.0,
         isInTune = false,
-        timestamp = null;
+        timestamp = DateTime.now();
 
   @override
   List<Object?> get props => [

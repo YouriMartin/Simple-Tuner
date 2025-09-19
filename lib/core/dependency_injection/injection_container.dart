@@ -54,7 +54,7 @@ Future<void> init() async {
 
   // Data sources
   sl.registerLazySingleton<AudioDataSource>(
-    () => AudioDataSourceImpl(),
+    () => createAudioDataSource(),
   );
 
   sl.registerLazySingleton<LocalStorageDataSource>(

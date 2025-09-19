@@ -46,13 +46,13 @@ class TuningResultModel {
   }
 
   /// Creates a TuningResultModel indicating no sound detected
-  const TuningResultModel.noSound()
+  TuningResultModel.noSound()
       : detectedNote = null,
         detectedFrequency = 0.0,
         centsOffset = 0.0,
         amplitude = 0.0,
         isInTune = false,
-        timestamp = null;
+        timestamp = DateTime.now();
 
   @override
   bool operator ==(Object other) =>

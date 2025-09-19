@@ -1,0 +1,31 @@
+# Exclude version control and IDE metadata
+.git
+.gitignore
+.idea
+.vscode
+
+# Flutter/Dart build artifacts
+build/
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.melos_tool
+coverage/
+
+# Platform-specific directories not needed for Flutter Web build
+android/
+ios/
+macos/
+windows/
+linux/
+
+# Tests and tooling not necessary for runtime image
+test/
+.tool-versions
+
+# Node or other caches
+node_modules/
+
+# Deployment metadata not needed in runtime image (kept for build stage only)
+# Note: keep deployment/ in context to copy nginx.conf

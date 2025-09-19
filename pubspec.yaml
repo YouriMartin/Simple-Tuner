@@ -22,7 +22,7 @@ dependencies:
   permission_handler: ^11.0.1
 
   # Audio processing dependencies
-  flutter_fft: ^2.0.0
+  flutter_fft: ^1.0.2+6
 
   # UI
   flutter_svg: ^2.0.7
