@@ -95,6 +95,14 @@ private:
     std::vector<float> m_fftInput;
     std::vector<float> m_fftOutput;
 
+    // Optimized FFT state
+    int m_fftSize = 0;                 // power-of-two size actually used for FFT
+    std::vector<float> m_window;       // window coefficients (Hann)
+    std::vector<int> m_bitrev;         // bit-reversal indices
+    // Using separate real/imag arrays avoids std::complex overhead
+    std::vector<float> m_fftReal;
+    std::vector<float> m_fftImag;
+
     // Constants
     static constexpr double CENTS_PER_SEMITONE = 100.0;
     static constexpr double SEMITONES_PER_OCTAVE = 12.0;

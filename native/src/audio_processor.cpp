@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <limits>
 
 // Note names for debugging
 const char* AudioProcessor::NOTE_NAMES[12] = {
@@ -56,6 +57,40 @@ int AudioProcessor::initialize(const AudioConfigFFI* config) {
     m_audioBuffer.resize(m_config.bufferSize);
     m_fftInput.resize(m_config.bufferSize);
     m_fftOutput.resize(m_config.bufferSize);
+
+    // Determine FFT size as the largest power of two <= bufferSize
+    int n = m_config.bufferSize;
+    if (n < 2) n = 2;
+    int p2 = 1;
+    while ((p2 << 1) <= n) p2 <<= 1;
+    m_fftSize = p2;
+
+    // Prepare FFT working buffers
+    m_fftReal.assign(m_fftSize, 0.0f);
+    m_fftImag.assign(m_fftSize, 0.0f);
+
+    // Precompute Hann window
+    m_window.resize(m_fftSize);
+    if (m_fftSize > 1) {
+        for (int i = 0; i < m_fftSize; ++i) {
+            m_window[i] = 0.5f * (1.0f - std::cos(2.0 * M_PI * i / (m_fftSize - 1)));
+        }
+    } else {
+        std::fill(m_window.begin(), m_window.end(), 1.0f);
+    }
+
+    // Precompute bit-reversal indices
+    int bits = 0; while ((1 << bits) < m_fftSize) ++bits;
+    m_bitrev.resize(m_fftSize);
+    for (int i = 0; i < m_fftSize; ++i) {
+        int x = i;
+        int r = 0;
+        for (int b = 0; b < bits; ++b) {
+            r = (r << 1) | (x & 1);
+            x >>= 1;
+        }
+        m_bitrev[i] = r;
+    }
 
     return 0; // Success
 }
@@ -158,33 +193,79 @@ void AudioProcessor::audioProcessingLoop() {
 }
 
 void AudioProcessor::processAudioBuffer(const std::vector<float>& buffer) {
-    // Copy to FFT input buffer
-    std::copy(buffer.begin(), buffer.end(), m_fftInput.begin());
+    // Use m_fftSize samples for FFT (largest power of two <= buffer size)
+    const int N = m_fftSize > 0 ? m_fftSize : (int)std::min<size_t>(buffer.size(), 2048);
+    if (N <= 1) return;
 
-    // Simple FFT implementation (for demo - real implementation would use FFTW or similar)
-    // This is a placeholder for proper FFT implementation
-    std::vector<float> magnitudes(m_config.bufferSize / 2);
+    // Apply Hann window and copy to working arrays (real/imag)
+    const int copyCount = std::min((int)buffer.size(), N);
+    for (int i = 0; i < copyCount; ++i) {
+        float w = (i < (int)m_window.size()) ? m_window[i] : 1.0f;
+        m_fftReal[i] = buffer[i] * w;
+        m_fftImag[i] = 0.0f;
+    }
+    for (int i = copyCount; i < N; ++i) {
+        m_fftReal[i] = 0.0f;
+        m_fftImag[i] = 0.0f;
+    }
 
-    // Calculate magnitude spectrum (simplified)
-    for (int k = 0; k < m_config.bufferSize / 2; k++) {
-        double real = 0.0, imag = 0.0;
-        for (int n = 0; n < m_config.bufferSize; n++) {
-            double angle = -2.0 * M_PI * k * n / m_config.bufferSize;
-            real += m_fftInput[n] * cos(angle);
-            imag += m_fftInput[n] * sin(angle);
+    // Bit-reversal permutation into temp arrays
+    std::vector<float> tr(N), ti(N);
+    for (int i = 0; i < N; ++i) {
+        int j = (i < (int)m_bitrev.size()) ? m_bitrev[i] : i;
+        tr[i] = m_fftReal[j];
+        ti[i] = m_fftImag[j];
+    }
+    m_fftReal.swap(tr);
+    m_fftImag.swap(ti);
+
+    // Iterative radix-2 Cooley-Tukey FFT
+    for (int len = 2; len <= N; len <<= 1) {
+        const int half = len >> 1;
+        const float ang = float(-2.0 * M_PI / len);
+        const float wlen_cos = std::cos(ang);
+        const float wlen_sin = std::sin(ang);
+        for (int i = 0; i < N; i += len) {
+            float w_cos = 1.0f;
+            float w_sin = 0.0f;
+            for (int j = 0; j < half; ++j) {
+                const int u = i + j;
+                const int v = u + half;
+                // t = w * a[v]
+                float t_real = m_fftReal[v] * w_cos - m_fftImag[v] * w_sin;
+                float t_imag = m_fftReal[v] * w_sin + m_fftImag[v] * w_cos;
+                // a[v] = a[u] - t
+                m_fftReal[v] = m_fftReal[u] - t_real;
+                m_fftImag[v] = m_fftImag[u] - t_imag;
+                // a[u] = a[u] + t
+                m_fftReal[u] += t_real;
+                m_fftImag[u] += t_imag;
+                // w *= wlen
+                float next_w_cos = w_cos * wlen_cos - w_sin * wlen_sin;
+                float next_w_sin = w_cos * wlen_sin + w_sin * wlen_cos;
+                w_cos = next_w_cos;
+                w_sin = next_w_sin;
+            }
         }
-        magnitudes[k] = sqrt(real * real + imag * imag);
+    }
+
+    // Compute magnitude spectrum (first N/2 bins)
+    std::vector<float> magnitudes(N / 2);
+    for (int k = 0; k < N / 2; ++k) {
+        float re = m_fftReal[k];
+        float im = m_fftImag[k];
+        magnitudes[k] = std::sqrt(re * re + im * im) / (N * 0.5f); // scale
     }
 
     // Detect fundamental frequency
     double detectedFreq = detectFundamentalFrequency(magnitudes);
 
-    // Calculate amplitude
+    // Calculate RMS amplitude of the time signal (unwindowed estimate)
     double amplitude = 0.0;
     for (float sample : buffer) {
-        amplitude += sample * sample;
+        amplitude += double(sample) * double(sample);
     }
-    amplitude = sqrt(amplitude / buffer.size());
+    amplitude = std::sqrt(amplitude / std::max<size_t>(buffer.size(), 1));
 
     // Update result
     {
@@ -229,10 +310,13 @@ double AudioProcessor::detectFundamentalFrequency(const std::vector<float>& fftM
     float peakMagnitude = 0.0f;
 
     // Search in frequency range appropriate for guitar (80-400 Hz)
-    int minIndex = static_cast<int>(80.0 * m_config.bufferSize / m_config.sampleRate);
-    int maxIndex = static_cast<int>(400.0 * m_config.bufferSize / m_config.sampleRate);
+    const int N = (m_fftSize > 0) ? m_fftSize : (int)fftMagnitudes.size() * 2;
+    int minIndex = static_cast<int>(80.0 * N / m_config.sampleRate);
+    int maxIndex = static_cast<int>(400.0 * N / m_config.sampleRate);
+    minIndex = std::max(1, minIndex);
+    maxIndex = std::min((int)fftMagnitudes.size() - 1, maxIndex);
 
-    for (int i = minIndex; i < maxIndex && i < fftMagnitudes.size(); i++) {
+    for (int i = minIndex; i < maxIndex && i < (int)fftMagnitudes.size(); i++) {
         if (fftMagnitudes[i] > peakMagnitude) {
             peakMagnitude = fftMagnitudes[i];
             peakIndex = i;
@@ -244,7 +328,7 @@ double AudioProcessor::detectFundamentalFrequency(const std::vector<float>& fftM
     }
 
     // Convert bin index to frequency
-    double frequency = (double)peakIndex * m_config.sampleRate / m_config.bufferSize;
+    double frequency = (double)peakIndex * m_config.sampleRate / N;
     return frequency;
 }
 
