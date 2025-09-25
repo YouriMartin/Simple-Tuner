@@ -1,7 +1,7 @@
 import 'dart:ffi';
 
 /// FFI structure for audio configuration
-class AudioConfigFFI extends Struct {
+final class AudioConfigFFI extends Struct {
   @Int32()
   external int sampleRate;
 
@@ -13,7 +13,7 @@ class AudioConfigFFI extends Struct {
 }
 
 /// FFI structure for tuning result
-class TuningResultFFI extends Struct {
+final class TuningResultFFI extends Struct {
   @Double()
   external double detectedFrequency;
 
@@ -34,7 +34,7 @@ class TuningResultFFI extends Struct {
 }
 
 /// FFI structure for note information
-class NoteInfoFFI extends Struct {
+final class NoteInfoFFI extends Struct {
   @Int32()
   external int noteIndex; // 0-11 (C, C#, D, D#, E, F, F#, G, G#, A, A#, B)
 
@@ -46,7 +46,7 @@ class NoteInfoFFI extends Struct {
 }
 
 /// FFI structure for guitar string configuration
-class GuitarStringFFI extends Struct {
+final class GuitarStringFFI extends Struct {
   @Int32()
   external int stringNumber; // 1-6
 
@@ -61,7 +61,7 @@ class GuitarStringFFI extends Struct {
 }
 
 /// FFI structure for tuning settings
-class TuningSettingsFFI extends Struct {
+final class TuningSettingsFFI extends Struct {
   @Double()
   external double a4Frequency;
 

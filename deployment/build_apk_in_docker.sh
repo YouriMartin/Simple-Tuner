@@ -21,20 +21,40 @@ docker build -f "${SCRIPT_DIR}/Dockerfile.android" -t "${IMAGE_TAG}" "${PROJECT_
 # We also accept Android licenses to avoid interactive prompts
 BUILD_CMD='\
   set -euo pipefail && \
+  echo "=== Flutter Version ===" && \
   flutter --version && \
+  echo "=== Flutter Doctor ===" && \
   flutter doctor -v && \
+  echo "=== Configuring Android ===" && \
   flutter config --enable-android && \
+  echo "=== Regenerating Android project structure ===" && \
+  rm -rf android/ && \
+  flutter create --platforms=android . && \
+  echo "=== Creating local.properties for Gradle ===" && \
+  echo "flutter.sdk=/sdks/flutter" > android/local.properties && \
+  echo "=== Accepting Android Licenses ===" && \
   yes | flutter doctor --android-licenses >/dev/null 2>&1 || true && \
-  flutter pub get && \
-  # Clean previous builds to avoid caching issues across hosts \
+  echo "=== Removing any problematic generated files ===" && \
+  rm -rf android/app/src/main/java/io/flutter/plugins/ && \
+  rm -rf ios/Runner/GeneratedPluginRegistrant.* && \
+  echo "=== Clearing Gradle cache ===" && \
+  rm -rf ~/.gradle/caches/ && \
+  rm -rf android/.gradle/ && \
+  rm -rf android/app/.gradle/ && \
+  echo "=== Clearing pub cache to avoid stale dependencies ===" && \
+  flutter pub cache clean && \
+  echo "=== Getting dependencies with timeout ===" && \
+  timeout 300 flutter pub get --no-precompile || { echo "pub get timed out after 5 minutes"; exit 1; } && \
+  echo "=== Cleaning previous builds ===" && \
   flutter clean && \
-  # Build split-per-abi release APKs \
+  rm -rf build/ && \
+  echo "=== Building APKs ===" && \
   flutter build apk --release --split-per-abi
 '
 
 echo "[2/4] Running Flutter build inside Docker..."
+# Running as the image default user (root) avoids git safe.directory and permission issues in /sdks/flutter
 docker run --rm \
-  -u $(id -u):$(id -g) \
   -v "${PROJECT_ROOT}:/app" \
   -w /app \
   "${IMAGE_TAG}" \

@@ -1,6 +1,6 @@
 # Android APK builder image for Simple Tuner
 # Uses Flutter image with Android SDK tools, installs required NDK & CMake
-FROM ghcr.io/cirruslabs/flutter:3.24.4
+FROM ghcr.io/cirruslabs/flutter:3.27.1
 
 # Accept Android SDK licenses non-interactively
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
