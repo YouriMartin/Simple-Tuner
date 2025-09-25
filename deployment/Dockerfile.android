@@ -1,0 +1,27 @@
+# Android APK builder image for Simple Tuner
+# Uses Flutter image with Android SDK tools, installs required NDK & CMake
+FROM ghcr.io/cirruslabs/flutter:3.24.4
+
+# Accept Android SDK licenses non-interactively
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV ANDROID_HOME=/opt/android-sdk
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Ensure sdkmanager exists; cirruslabs image ships with SDK & sdkmanager
+# Install required Android components matching the project's Gradle config
+RUN yes | sdkmanager --licenses && \
+    sdkmanager \
+      "platform-tools" \
+      "platforms;android-34" \
+      "build-tools;34.0.0" \
+      "cmake;3.18.1" \
+      "ndk;25.1.8937393"
+
+# Prepare workdir
+WORKDIR /app
+
+# Pre-cache Flutter artifacts to speed up builds (optional)
+RUN flutter precache --android
+
+# Default command can be overridden by `docker run ... <cmd>`
+CMD ["bash"]
